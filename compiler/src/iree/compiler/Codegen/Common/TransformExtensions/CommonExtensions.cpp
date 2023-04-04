@@ -1072,8 +1072,6 @@ transform_dialect::ComputeWorkgroupCountRegionOp::apply(
     transform::TransformState &state) {
   ArrayRef<Operation *> targetOps = state.getPayloadOps(getTarget());
   if (targetOps.empty()) {
-    transformResults.set(getForallOp().cast<OpResult>(), {});
-    transformResults.set(getTiledOp().cast<OpResult>(), {});
     return DiagnosedSilenceableFailure::success();
   }
   if (targetOps.size() != 1) {

@@ -16,6 +16,7 @@
 #include "iree/compiler/Codegen/Passes.h"
 #include "iree/compiler/Codegen/Transforms/Transforms.h"
 #include "iree/compiler/Codegen/Utils/GPUUtils.h"
+#include "iree/compiler/Codegen/Utils/MarkerUtils.h"
 #include "iree/compiler/Codegen/Utils/Utils.h"
 #include "iree/compiler/Dialect/Flow/IR/FlowOps.h"
 #include "iree/compiler/Dialect/HAL/IR/HALOps.h"
@@ -1209,7 +1210,18 @@ static LogicalResult gpuComprehensiveBufferizeCopyFn(OpBuilder &builder,
   // post-bufferization copies do not trigger properly.
   // So we keep using `createLinalgCopyOp` which builds a GenericOp.
   // builder.create<linalg::CopyOp>(loc, from, to);
-  mlir::iree_compiler::createLinalgCopyOp(builder, loc, from, to);
+    // Insert barriers for copies from and to shared memory.
+  bool needsBarrier = false;
+  if (hasSharedMemoryAddressSpace(from.getType().cast<MemRefType>()) !=
+      hasSharedMemoryAddressSpace(to.getType().cast<MemRefType>())) {
+    needsBarrier = true;
+  }
+  if (needsBarrier) builder.create<gpu::BarrierOp>(loc);
+  Operation* copy = mlir::iree_compiler::createLinalgCopyOp(builder, loc, from, to);
+  if (needsBarrier) {
+    setMarker(copy, getCopyToWorkgroupMemoryMarker());
+    builder.create<gpu::BarrierOp>(loc);
+  }
   return success();
 }
 

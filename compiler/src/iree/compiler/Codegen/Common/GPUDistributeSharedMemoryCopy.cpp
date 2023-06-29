@@ -338,7 +338,12 @@ static void UnrollSharedMemoryLoops(
     if (!loopsToIgnore.count(forOp)) forOpsToUnroll.push_back(forOp);
   });
   for (scf::ForOp forOp : llvm::reverse(forOpsToUnroll)) {
-    (void)loopUnrollByFactor(forOp, numIteration(forOp));
+    auto lbCstOp = forOp.getLowerBound().getDefiningOp<arith::ConstantIndexOp>();
+    auto ubCstOp = forOp.getUpperBound().getDefiningOp<arith::ConstantIndexOp>();
+    auto stepCstOp = forOp.getStep().getDefiningOp<arith::ConstantIndexOp>();
+    if (lbCstOp && ubCstOp && stepCstOp) {
+      (void)loopUnrollByFactor(forOp, numIteration(forOp));
+    }
   }
 }
 
@@ -425,6 +430,11 @@ class GPUDistributeSharedMemoryCopyPass
       // well aligned on the number of threads.
       // TODO(thomasraoux): Handle this case with padding instead so that we get
       // good performance for more complex shapes.
+      
+      // Ignore all the exisiting loop
+      llvm::SmallDenseSet<scf::ForOp> loopsToIgnore;
+      funcOp.walk([&](scf::ForOp loop) { loopsToIgnore.insert(loop); });
+
       RewritePatternSet threadLevelTilingPatterns(context);
       populateTilingCopyToWorkgroupMemPatterns(threadLevelTilingPatterns,
                                                workgroupSize);
@@ -443,6 +453,8 @@ class GPUDistributeSharedMemoryCopyPass
               funcOp, std::move(threadTilingCanonicalizationPatterns)))) {
         return signalPassFailure();
       }
+
+    //  UnrollSharedMemoryLoops(funcOp, loopsToIgnore);
     }
   }
 };

@@ -35,11 +35,19 @@ llvm::SmallVector<mlir::linalg::ProcInfo, 2> getGPUThreadIdsAndCounts(
       gpu::Dimension::x, gpu::Dimension::y, gpu::Dimension::z};
   mlir::Type indexType = builder.getIndexType();
   for (unsigned i = 0; i < numDims; ++i) {
+    if(workgroupSize[i] == 1) {
+    procInfo[numDims - 1 - i] = {
+        builder.create<mlir::arith::ConstantOp>(loc, builder.getIndexAttr(0)),
+        builder.create<mlir::arith::ConstantOp>(
+            loc, builder.getIndexAttr(workgroupSize[i])),
+        linalg::DistributionMethod::Cyclic};
+    } else {
     procInfo[numDims - 1 - i] = {
         builder.create<mlir::gpu::ThreadIdOp>(loc, indexType, dimAttr[i]),
         builder.create<mlir::arith::ConstantOp>(
             loc, builder.getIndexAttr(workgroupSize[i])),
         linalg::DistributionMethod::Cyclic};
+    }
   }
   return procInfo;
 }
